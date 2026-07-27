@@ -21,7 +21,7 @@ ul#votes {
 li.vote {
     position: relative;
     display: block;
-    border-left: solid 2px rgba(0, 0, 0,  0.2);
+    border-left: solid 2px var(--md-outline-variant, rgba(0, 0, 0, 0.2));
     padding-bottom: 1.5rem;
     padding-left: 1.5rem;
 }
@@ -43,7 +43,7 @@ li.vote::before {
     font-size: 1rem;
     line-height: 2rem;
     text-align: center;
-    background: #f6f6f3;
+    background: var(--md-surface, #f6f6f3);
     width: 2rem;
     height: 2rem;
 }
@@ -63,17 +63,25 @@ li.vote.contents.up::before {
     color: #e81224;
 }
 
+li.vote.reaction::before {
+    content: attr(data-reaction);
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-size: 1.1rem;
+    line-height: 2rem;
+    text-shadow: none;
+}
+
 li.vote div.vote-inner {
     position: relative;
     padding: 0.5rem 1rem;
-    background: white;
+    background: var(--md-surface-container-lowest, white);
 }
 
 li.vote div.vote-inner::before {
     content: "";
     display: block;
     position: absolute;
-    border-color: transparent white transparent transparent;
+    border-color: transparent var(--md-surface-container-lowest, white) transparent transparent;
     top: 5px;
     left: -23px;
     border-width: 10px 12px;

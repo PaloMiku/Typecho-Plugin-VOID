@@ -25,9 +25,15 @@ window.loadMoreActivity = function () {
         }
 
         $.each(data.data, function (i, item) {
-            var type = item.type == 'up' ? '赞' : '踩';
-            var label = from[item.from] || '内容';
-            var $item = $('<li></li>').addClass('vote').addClass(item.from).addClass(item.type);
+        var isEmoji = item.type != 'up' && item.type != 'down';
+        var type = item.type == 'up' ? '赞' : (item.type == 'down' ? '踩' : item.type);
+        var label = from[item.from] || '内容';
+        var $item = $('<li></li>').addClass('vote').addClass(item.from);
+        if (isEmoji) {
+            $item.addClass('reaction').attr('data-reaction', item.type);
+        } else {
+            $item.addClass(item.type);
+        }
             var $inner = $('<div></div>').addClass('vote-inner');
             var $meta = $('<span></span>').addClass('meta');
             var $misc = $('<span></span>').addClass('misc');
@@ -40,7 +46,7 @@ window.loadMoreActivity = function () {
                     .attr('target', '_blank')
                     .text(item.content)
             );
-            $inner.append(document.createTextNode('」收获了一个' + type + '。'));
+            $inner.append(document.createTextNode('」收获了一个' + (isEmoji ? ' ' : '') + type + (isEmoji ? ' 表态' : '') + '。'));
 
             $misc.append(document.createTextNode((item.location || '未知') + ', '));
             $misc.append(browserHtml);

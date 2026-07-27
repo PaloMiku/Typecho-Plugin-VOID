@@ -1,10 +1,10 @@
 .void-editor-stats {
     margin: 16px 0 0;
     padding: 14px 16px;
-    border: 1px solid #d9dee3;
+    border: 1px solid var(--md-outline-variant, #d9dee3);
     border-radius: 14px;
-    background: #fff;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    background: var(--md-surface-container-lowest, #fff);
+    box-shadow: var(--md-elevation-1, 0 8px 24px rgba(15, 23, 42, 0.04));
 }
 
 .void-editor-stats-header {
@@ -18,12 +18,12 @@
 .void-editor-stats-title {
     font-size: 14px;
     font-weight: 600;
-    color: #1f2937;
+    color: var(--md-on-surface, #1f2937);
 }
 
 .void-editor-stats-subtitle {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--md-on-surface-variant, #6b7280);
 }
 
 .void-editor-stats-grid {
@@ -36,15 +36,15 @@
     min-width: 0;
     padding: 10px 12px;
     border-radius: 10px;
-    border: 1px solid #e7ecf3;
-    background: linear-gradient(180deg, #fafbff 0%, #f4f7fb 100%);
+    border: 1px solid var(--md-outline-variant, #e7ecf3);
+    background: linear-gradient(180deg, var(--md-surface-container-low, #fafbff) 0%, var(--md-surface-container, #f4f7fb) 100%);
 }
 
 .void-editor-stats-label {
     display: block;
     margin-bottom: 6px;
     font-size: 12px;
-    color: #6b7280;
+    color: var(--md-on-surface-variant, #6b7280);
 }
 
 .void-editor-stats-value {
@@ -52,7 +52,7 @@
     font-size: 22px;
     line-height: 1;
     font-weight: 700;
-    color: #111827;
+    color: var(--md-on-surface, #111827);
 }
 
 .void-editor-stats-detail,
@@ -60,10 +60,10 @@
     margin: 10px 0 0;
     padding: 9px 11px;
     border-radius: 10px;
-    background: #f8fafc;
+    background: var(--md-surface-container, #f8fafc);
     font-size: 12px;
     line-height: 1.6;
-    color: #6b7280;
+    color: var(--md-on-surface-variant, #6b7280);
 }
 
 @media (max-width: 768px) {
