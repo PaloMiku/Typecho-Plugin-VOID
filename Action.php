@@ -96,8 +96,25 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
             return '';
         }
 
-        $type = strtolower(trim((string)$this->body['type']));
-        return in_array($type, $allowed, true) ? $type : '';
+        $type = (string)$this->body['type'];
+        // 允许的字符串类型（up/down）或 emoji 类型
+        if (in_array($type, $allowed, true)) {
+            return $type;
+        }
+        // emoji 反应类型校验：必须是已知 emoji 集合中的一个
+        $knownEmojis = $this->knownReactionEmojis();
+        if (in_array($type, $knownEmojis, true)) {
+            return $type;
+        }
+        return '';
+    }
+
+    /**
+     * 已知支持的 emoji 反应类型
+     */
+    private function knownReactionEmojis()
+    {
+        return array('👍', '👎', '🤡', '❤️', '🔥', '👀', '😂', '🤔', '🎉');
     }
 
     public function action()
@@ -107,6 +124,7 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
 
         $this->on(isset($_GET['content']) || isset($_POST['content']))->vote_content();
         $this->on(isset($_GET['comment']) || isset($_POST['comment']))->vote_comment();
+        $this->on(isset($_GET['reactions']) || isset($_POST['reactions']))->vote_reactions();
         $this->on(isset($_GET['show']) || isset($_POST['show']))->vote_show();
         $this->on(isset($_GET['getimginfo']) || isset($_POST['getimginfo']))->void_img_info();
         $this->on(isset($_GET['getsingleimginfo']) || isset($_POST['getsingleimginfo']))->void_single_img_info();
@@ -225,8 +243,11 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
 
         if ($type === 'up') {
             $this->vote_excute('comments', 'coid', $id, 'likes', 'up');
-        } else {
+        } elseif ($type === 'down') {
             $this->vote_excute('comments', 'coid', $id, 'dislikes', 'down');
+        } else {
+            // emoji 反应类型：直接写入 votes 表，不更新 likes/dislikes 字段
+            $this->vote_excute('comments', 'coid', $id, '', $type);
         }
     }
 
@@ -242,7 +263,61 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
             return;
         }
 
-        $this->vote_excute('contents', 'cid', $id, 'likes', 'up');
+        if ($type === 'up') {
+            $this->vote_excute('contents', 'cid', $id, 'likes', 'up');
+        } else {
+            // emoji 反应类型：直接写入 votes 表，不更新 likes 字段
+            $this->vote_excute('contents', 'cid', $id, '', $type);
+        }
+    }
+
+    /**
+     * 聚合查询某个目标的 emoji 反应计数
+     * GET /action/void?reactions&id=xxx&table=comment|content
+     */
+    private function vote_reactions()
+    {
+        header("Content-type:application/json");
+        $db = Typecho_Db::get();
+
+        $id = 0;
+        if (isset($_GET['id'])) $id = (int)$_GET['id'];
+        elseif (isset($_POST['id'])) $id = (int)$_POST['id'];
+        if (!$id) {
+            $this->vote_json_response(400, 'invalid id');
+            return;
+        }
+
+        $table = '';
+        if (isset($_GET['table'])) $table = (string)$_GET['table'];
+        elseif (isset($_POST['table'])) $table = (string)$_POST['table'];
+        // 归一化 table 参数：content -> contents, comment -> comments
+        $tableMap = array('content' => 'contents', 'comment' => 'comments', 'contents' => 'contents', 'comments' => 'comments');
+        if (!isset($tableMap[$table])) {
+            $this->vote_json_response(400, 'invalid table');
+            return;
+        }
+        $table = $tableMap[$table];
+
+        $rows = $db->fetchAll($db->select('type', 'COUNT(*) AS cnt')
+            ->from('table.votes')
+            ->where('id = ?', $id)
+            ->where('table = ?', $table)
+            ->group('type'));
+
+        $reactions = array();
+        foreach ($rows as $row) {
+            // 跳过 up/down 字符串类型（旧数据），只聚合 emoji 类型
+            if ($row['type'] !== 'up' && $row['type'] !== 'down') {
+                $reactions[$row['type']] = (int)$row['cnt'];
+            }
+        }
+
+        echo json_encode(array(
+            'code' => 200,
+            'msg' => 'ok',
+            'reactions' => $reactions
+        ));
     }
 
     private function vote_show ()
@@ -405,7 +480,7 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
                         ->from('table.' . $table)
                         ->where($key . ' = ?', $id)
                         ->limit(1));
-        } catch (Typecho_Db_Query_Exception $th) {
+        } catch (\Throwable $th) {
             $this->vote_json_response(500, $th->getMessage());
             return;
         }
@@ -417,35 +492,87 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
 
         $row = null;
         try {
-            $row = $db->fetchRow($db->select('type')
+            // 查询该 IP 对该目标的既有投票记录：
+            //  - up/down：按 ip+id+table 查（同一目标仅一条）
+            //  - emoji：按 ip+id+table 查，但排除 up/down 旧记录（emoji 与 up/down 独立计数）
+            $query = $db->select('type')
                         ->from('table.votes')
                         ->where('ip = ?', $ip)
                         ->where('id = ?', $id)
-                        ->where('table = ?', $table)
-                        ->limit(1));
-        } catch (Typecho_Db_Query_Exception $th) {
+                        ->where('table = ?', $table);
+            if ($type !== 'up' && $type !== 'down') {
+                $query = $query->where('type <> ?', 'up')->where('type <> ?', 'down');
+            }
+            $row = $db->fetchRow($query->limit(1));
+        } catch (\Throwable $th) {
             $this->vote_json_response(500, $th->getMessage());
             return;
         }
 
+        $isEmoji = ($type !== 'up' && $type !== 'down');
+
         if (is_array($row) && count($row)) {
-            if ($row['type'] != $type) {
-                // 不允许改变投票类型
-                $this->vote_json_response(403, 'can\'t change vote');
+            if (!$isEmoji) {
+                // up/down 类型：不允许改变投票方向
+                if ($row['type'] != $type) {
+                    $this->vote_json_response(403, 'can\'t change vote');
+                } else {
+                    $this->vote_json_response(302, 'done');
+                }
             } else {
-                $this->vote_json_response(302, 'done');
+                // emoji 类型：点击相同 emoji => 取消；点击不同 emoji => 切换
+                if ($row['type'] === $type) {
+                    // 取消当前 emoji
+                    try {
+                        $db->query($db->delete('table.votes')
+                            ->where('ip = ?', $ip)
+                            ->where('id = ?', $id)
+                            ->where('table = ?', $table)
+                            ->where('type = ?', $type));
+                    } catch (\Throwable $th) {
+                        $this->vote_json_response(500, $th->getMessage());
+                        return;
+                    }
+                    $this->vote_json_response(200, 'cancelled', array('removed' => $type));
+                } else {
+                    // 切换为另一个 emoji：删除旧 emoji 记录，插入新记录
+                    // 注意：只删除该用户在该目标上的 emoji 记录，不影响 up/down 旧投票
+                    $previous = $row['type'];
+                    try {
+                        $db->query($db->delete('table.votes')
+                            ->where('ip = ?', $ip)
+                            ->where('id = ?', $id)
+                            ->where('table = ?', $table)
+                            ->where('type <> ?', 'up')
+                            ->where('type <> ?', 'down'));
+                        $db->query($db->insert('table.votes')->rows(array(
+                            'id' => $id,
+                            'table' => $table,
+                            'type' => $type,
+                            'agent' => $_SERVER['HTTP_USER_AGENT'] ?? '',
+                            'ip' => $ip,
+                            'created' => time()
+                        )));
+                    } catch (\Throwable $th) {
+                        $this->vote_json_response(500, $th->getMessage());
+                        return;
+                    }
+                    $this->vote_json_response(200, 'switched', array('previous' => $previous));
+                }
             }
         } else {
             try {
-                // 更新表
-                $row = $db->fetchRow($db->select($field)
-                            ->from('table.'.$table)
-                            ->where($key.' = ?', $id));
-                $newValue = (int)$row[$field] + 1;
-                $db->query($db->update('table.'.$table)
-                    ->rows(array($field => $newValue))
-                    ->where($key.' = ?', $id));
-            
+                // 更新目标表计数字段 +1（仅对 up/down 等有对应字段的类型）
+                if (!empty($field)) {
+                    $row = $db->fetchRow($db->select($field)
+                                ->from('table.'.$table)
+                                ->where($key.' = ?', $id));
+                    $newValue = (int)$row[$field] + 1;
+                    $db->query($db->update('table.'.$table)
+                        ->rows(array($field => $newValue))
+                        ->where($key.' = ?', $id));
+                }
+
                 // 插入新投票记录
                 $db->query($db->insert('table.votes')->rows(array(
                     'id' => $id,
@@ -456,8 +583,8 @@ class VOID_Action extends Typecho_Widget implements Widget_Interface_Do
                     'created' => time()
                 )));
 
-                $this->vote_json_response(200, 'done');
-            } catch (Typecho_Db_Query_Exception $th) {
+                $this->vote_json_response(200, 'added');
+            } catch (\Throwable $th) {
                 $this->vote_json_response(500, $th->getMessage());
             }
         }

@@ -182,12 +182,12 @@ class VOID_Plugin implements Typecho_Plugin_Interface
                 `vid` int unsigned auto_increment,
                 `id` int unsigned not null,
                 `table` char(32) not null,
-                `type` char(32) not null,
+                `type` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null,
                 `agent` text,
                 `ip` varchar(128),
                 `created` int unsigned default 0,
                 primary key (`vid`)
-            ) default charset=utf8;
+            ) default charset=utf8mb4;
             CREATE INDEX index_ip ON '.$table_name.'(`ip`);
             CREATE INDEX index_id ON '.$table_name.'(`id`);
             CREATE INDEX index_table ON '.$table_name.'(`table`);
@@ -204,6 +204,8 @@ class VOID_Plugin implements Typecho_Plugin_Interface
             if (!self::hasIndex($prefix.'votes', 'index_created')) {
                 self::queryAndCatch('CREATE INDEX index_created ON `'. $prefix .'votes`(`created`)');
             }
+            // 确保 type 列支持 utf8mb4（emoji 反应需要 4 字节字符集 + bin 排序规则区分不同 emoji）
+            self::queryAndCatch('ALTER TABLE `'. $prefix .'votes` MODIFY COLUMN `type` CHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ""');
         }
 
         // 添加一个面板，展示互动信息，例如评论赞踩、文章点赞
